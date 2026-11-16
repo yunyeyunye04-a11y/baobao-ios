@@ -1,0 +1,129 @@
+# Compiles the app for the iOS simulator and for a device, unsigned, on a macOS
+# runner: the only place Xcode runs. Needs no secrets. Signing, TestFlight and
+# running anything on a device are later jobs. The engine job does run the engine: on
+# the iOS Simulator, one real round against a fake model, then a restart in place.
+name: Baby iOS compile-only ARM
+
+on:
+  push:
+    branches: [main, 'feat/ios-**', 'ios/**']
+    paths:
+      - 'app/**'
+      - 'packages/**'
+      - 'tooling/ios/**'
+      - 'runtime/ios/**'
+      - 'runtime/ohos/**'
+      - 'runtime/patches/**'
+      - '.github/workflows/ios-compile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baby-ios-compile-only-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phone-protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: d46847ff2e0953d2035e0e6078be1e06dd7cbc40
+      - name: Apply and verify Baby source changes
+        shell: bash
+        run: |
+          python3 - <<'BABY_PATCH'
+          import base64, pathlib, subprocess, sys, tempfile
+          p = pathlib.Path(tempfile.mkdtemp(prefix="baobao-ci-"))
+          (p / "patch.py").write_bytes(base64.b64decode("IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJBcHBseSB0aGUgQmFieSBicmFuZGluZyBhbmQgc2FmZSBzdGFydGVyIGNhcmRzIHRvIHRoZSBwaW5uZWQgZHNoLUdvIGNoZWNrb3V0LgoKVGhpcyBzY3JpcHQgZG9lcyBub3QgYnVpbGQgaU9TIGJpbmFyaWVzOyBBcHBsZSBzaWduaW5nL2J1aWxkaW5nIHN0aWxsIGhhcHBlbnMgb24gYSBNYWMuCiIiIgpmcm9tIF9fZnV0dXJlX18gaW1wb3J0IGFubm90YXRpb25zCgppbXBvcnQgYXJncGFyc2UKaW1wb3J0IGRhdGV0aW1lIGFzIGR0CmltcG9ydCBqc29uCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKaW1wb3J0IHNodXRpbAppbXBvcnQgc3VicHJvY2VzcwppbXBvcnQgc3lzCgpQSU5ORURfQ09NTUlUID0gImQ0Njg0N2ZmMmUwOTUzZDIwMzVlMGU2MDc4YmUxZTA2ZGQ3Y2JjNDAiCk9MRF9CVU5ETEVfSUQgPSAiaW8uZ2l0aHViLmNjY2gxbW5leXl5LmRzaGdvIgpJT1NfVEVYVF9TVUZGSVhFUyA9IHsiLnN3aWZ0IiwgIi5wbGlzdCIsICIuZW50aXRsZW1lbnRzIiwgIi5wYnhwcm9qIiwgIi54Y2NvbmZpZyIsICIueGNzY2hlbWUiLCAiLm1kIn0KUkVRVUlSRUQgPSAoCiAgICAiYXBwL2xpYi9zdGF0ZS9hcHBfaW5mby5kYXJ0IiwKICAgICJhcHAvbGliL3VpL2NoYXQvZW1wdHlfc3RhdGUuZGFydCIsCiAgICAiYXBwL2xpYi9sMTBuL3BhcnRzL3ZpZXdfemguYXJiIiwKICAgICJhcHAvbGliL2wxMG4vcGFydHMvdmlld19lbi5hcmIiLAogICAgImFwcC9hbmRyb2lkL2FwcC9zcmMvbWFpbi9BbmRyb2lkTWFuaWZlc3QueG1sIiwKICAgICJhcHAvaW9zL1J1bm5lci9JbmZvLnBsaXN0IiwKICAgICJhcHAvaW9zL1J1bm5lci54Y29kZXByb2ovcHJvamVjdC5wYnhwcm9qIiwKICAgICJhcHAvaW9zL1J1bm5lci9SdW5uZXIuZW50aXRsZW1lbnRzIiwKICAgICJhcHAvaW9zL1NoYXJlRXh0ZW5zaW9uL1NoYXJlSW5ib3guc3dpZnQiLAopCgpQUk9NUFRTID0gewogICAgInpoIjogewogICAgICAgICJ2aWV3QmFieVBsYW4iOiAi5a6d5a6d5LuK5pel6K6h5YiSIiwKICAgICAgICAidmlld0JhYnlQbGFuSGludCI6ICLmiornm67moIfmi4bmiJDlj6/miafooYzmraXpqqQiLAogICAgICAgICJ2aWV3QmFieVBsYW5Qcm9tcHQiOiAi6K+35oqK5oiR5LiL6Z2i55qE55uu5qCH5pW055CG5oiQ5LiA5Lu96L276YeN57yT5oCl5riF5qWa44CB5q+P6aG55bim6aKE6K6h55So5pe255qE5LuK5pel6K6h5YiS77yb5YWI5YiX6K6h5YiS77yM5LiN6KaB5L+u5pS55paH5Lu25oiW5omn6KGM5aSW6YOo5pON5L2c44CCXG5cblvlhpnkuIvku4rlpKnnmoTnm67moIddIiwKICAgICAgICAidmlld0JhYnlGaWxlcyI6ICLlrp3lrp3mlofku7bkvZPmo4AiLAogICAgICAgICJ2aWV3QmFieUZpbGVzSGludCI6ICLlhYjnnIvmuIXlt6XkvZzljLrvvIzlho3nu5nmlbTnkIblu7rorq4iLAogICAgICAgICJ2aWV3QmFieUZpbGVzUHJvbXB0Ijo... (line truncated to 2000 chars)
+          (p / "verify.py").write_bytes(base64.b64decode("IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJTdGF0aWMgYWNjZXB0YW5jZSBjaGVja3MgZm9yIHRoZSBCYWJ5IGRzaC1HbyBpT1MgZm9yay4iIiIKZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IGFyZ3BhcnNlCmltcG9ydCBqc29uCmltcG9ydCBwbGlzdGxpYgppbXBvcnQgcmUKaW1wb3J0IHN1YnByb2Nlc3MKZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpQSU5ORURfQ09NTUlUID0gImQ0Njg0N2ZmMmUwOTUzZDIwMzVlMGU2MDc4YmUxZTA2ZGQ3Y2JjNDAiCk9MRF9CVU5ETEVfSUQgPSAiaW8uZ2l0aHViLmNjY2gxbW5leXl5LmRzaGdvIgpSRVFVSVJFRCA9ICgKICAgICJhcHAvbGliL3N0YXRlL2FwcF9pbmZvLmRhcnQiLAogICAgImFwcC9saWIvdWkvY2hhdC9lbXB0eV9zdGF0ZS5kYXJ0IiwKICAgICJhcHAvbGliL2wxMG4vcGFydHMvdmlld196aC5hcmIiLAogICAgImFwcC9saWIvbDEwbi9wYXJ0cy92aWV3X2VuLmFyYiIsCiAgICAiYXBwL2xpYi9sMTBuL2FwcF96aC5hcmIiLAogICAgImFwcC9saWIvbDEwbi9hcHBfZW4uYXJiIiwKICAgICJhcHAvYW5kcm9pZC9hcHAvc3JjL21haW4vQW5kcm9pZE1hbmlmZXN0LnhtbCIsCiAgICAiYXBwL2lvcy9SdW5uZXIvSW5mby5wbGlzdCIsCiAgICAiYXBwL2lvcy9SdW5uZXIueGNvZGVwcm9qL3Byb2plY3QucGJ4cHJvaiIsCiAgICAiYXBwL2lvcy9SdW5uZXIvUnVubmVyLmVudGl0bGVtZW50cyIsCiAgICAiYXBwL2lvcy9TaGFyZUV4dGVuc2lvbi9TaGFyZUluYm94LnN3aWZ0IiwKKQpCQUJZX0tFWVMgPSB0dXBsZSgKICAgIGYidmlld0JhYnl7YXJlYX17c3VmZml4fSIKICAgIGZvciBhcmVhIGluICgiUGxhbiIsICJGaWxlcyIsICJSZXZpZXciLCAiSWRlYSIpCiAgICBmb3Igc3VmZml4IGluICgiIiwgIkhpbnQiLCAiUHJvbXB0IikKKQoKCmRlZiByZWFkKHJvb3Q6IFBhdGgsIHJlbDogc3RyKSAtPiBzdHI6CiAgICByZXR1cm4gKHJvb3QgLyByZWwpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQoKCmRlZiBmYWlsKG1lc3NhZ2U6IHN0cikgLT4gTm9uZToKICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJGQUlMOiB7bWVzc2FnZX0iKQoKCmRlZiBtYWluKCkgLT4gaW50OgogICAgcGFyc2VyID0gYXJncGFyc2UuQXJndW1lbnRQYXJzZXIoZGVzY3JpcHRpb249X19kb2NfXykKICAgIHBhcnNlci5hZGRfYXJndW1lbnQoIi0tcmVwbyIsIHJlcXVpcmVkPVRydWUsIHR5cGU9UGF0aCkKICAgIHBhcnNlci5hZGRfYXJndW1lbnQoIi0tYnVuZGxlLXByZWZpeCIsIGRlZmF1bHQ9ImNvbS5iYW9iYW8uZHNoZ28iKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgiLS1leHBlY3RlZC1jb21taXQiLCBkZWZhdWx0PVBJTk5FRF9DT01NSVQpCiAgICBhcmdzID0gcGFyc2VyLnBhcnNlX2FyZ3MoKQogICAgcm9vdCA9IGFyZ3MucmVwby5yZXNvbHZlKCkKICAgIGlmIG5vdCByb290LmlzX2RpcigpOgogICAgIC... (line truncated to 2000 chars)
+          subprocess.run([sys.executable, str(p / "patch.py"), "--repo", "."], check=True)
+          subprocess.run([sys.executable, str(p / "verify.py"), "--repo", "."], check=True)
+          BABY_PATCH
+      - name: Check the shared phone native owner without Apple services
+        run: |
+          bash tooling/ios/build-phone-self-runner.sh --check
+          python3 tooling/ios/tests/phone-self-runner.test.py -v
+          python3 -B tooling/ios/test-channel-contract.py -v
+
+  compile:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      FLUTTER_VERSION: 3.47.7
+      FLUTTER_SHA256: dd9da574c3168460550117eb0e8dd0313ae934fabf64a82a6d557fff5fd1422e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: d46847ff2e0953d2035e0e6078be1e06dd7cbc40
+      - name: Apply and verify Baby source changes
+        shell: bash
+        run: |
+          python3 - <<'BABY_PATCH'
+          import base64, pathlib, subprocess, sys, tempfile
+          p = pathlib.Path(tempfile.mkdtemp(prefix="baobao-ci-"))
+          (p / "patch.py").write_bytes(base64.b64decode("IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJBcHBseSB0aGUgQmFieSBicmFuZGluZyBhbmQgc2FmZSBzdGFydGVyIGNhcmRzIHRvIHRoZSBwaW5uZWQgZHNoLUdvIGNoZWNrb3V0LgoKVGhpcyBzY3JpcHQgZG9lcyBub3QgYnVpbGQgaU9TIGJpbmFyaWVzOyBBcHBsZSBzaWduaW5nL2J1aWxkaW5nIHN0aWxsIGhhcHBlbnMgb24gYSBNYWMuCiIiIgpmcm9tIF9fZnV0dXJlX18gaW1wb3J0IGFubm90YXRpb25zCgppbXBvcnQgYXJncGFyc2UKaW1wb3J0IGRhdGV0aW1lIGFzIGR0CmltcG9ydCBqc29uCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKaW1wb3J0IHNodXRpbAppbXBvcnQgc3VicHJvY2VzcwppbXBvcnQgc3lzCgpQSU5ORURfQ09NTUlUID0gImQ0Njg0N2ZmMmUwOTUzZDIwMzVlMGU2MDc4YmUxZTA2ZGQ3Y2JjNDAiCk9MRF9CVU5ETEVfSUQgPSAiaW8uZ2l0aHViLmNjY2gxbW5leXl5LmRzaGdvIgpJT1NfVEVYVF9TVUZGSVhFUyA9IHsiLnN3aWZ0IiwgIi5wbGlzdCIsICIuZW50aXRsZW1lbnRzIiwgIi5wYnhwcm9qIiwgIi54Y2NvbmZpZyIsICIueGNzY2hlbWUiLCAiLm1kIn0KUkVRVUlSRUQgPSAoCiAgICAiYXBwL2xpYi9zdGF0ZS9hcHBfaW5mby5kYXJ0IiwKICAgICJhcHAvbGliL3VpL2NoYXQvZW1wdHlfc3RhdGUuZGFydCIsCiAgICAiYXBwL2xpYi9sMTBuL3BhcnRzL3ZpZXdfemguYXJiIiwKICAgICJhcHAvbGliL2wxMG4vcGFydHMvdmlld19lbi5hcmIiLAogICAgImFwcC9hbmRyb2lkL2FwcC9zcmMvbWFpbi9BbmRyb2lkTWFuaWZlc3QueG1sIiwKICAgICJhcHAvaW9zL1J1bm5lci9JbmZvLnBsaXN0IiwKICAgICJhcHAvaW9zL1J1bm5lci54Y29kZXByb2ovcHJvamVjdC5wYnhwcm9qIiwKICAgICJhcHAvaW9zL1J1bm5lci9SdW5uZXIuZW50aXRsZW1lbnRzIiwKICAgICJhcHAvaW9zL1NoYXJlRXh0ZW5zaW9uL1NoYXJlSW5ib3guc3dpZnQiLAopCgpQUk9NUFRTID0gewogICAgInpoIjogewogICAgICAgICJ2aWV3QmFieVBsYW4iOiAi5a6d5a6d5LuK5pel6K6h5YiSIiwKICAgICAgICAidmlld0JhYnlQbGFuSGludCI6ICLmiornm67moIfmi4bmiJDlj6/miafooYzmraXpqqQiLAogICAgICAgICJ2aWV3QmFieVBsYW5Qcm9tcHQiOiAi6K+35oqK5oiR5LiL6Z2i55qE55uu5qCH5pW055CG5oiQ5LiA5Lu96L276YeN57yT5oCl5riF5qWa44CB5q+P6aG55bim6aKE6K6h55So5pe255qE5LuK5pel6K6h5YiS77yb5YWI5YiX6K6h5YiS77yM5LiN6KaB5L+u5pS55paH5Lu25oiW5omn6KGM5aSW6YOo5pON5L2c44CCXG5cblvlhpnkuIvku4rlpKnnmoTnm67moIddIiwKICAgICAgICAidmlld0JhYnlGaWxlcyI6ICLlrp3lrp3mlofku7bkvZPmo4AiLAogICAgICAgICJ2aWV3QmFieUZpbGVzSGludCI6ICLlhYjnnIvmuIXlt6XkvZzljLrvvIzlho3nu5nmlbTnkIblu7rorq4iLAogICAgICAgICJ2aWV3QmFieUZpbGVzUHJvbXB0Ijo... (line truncated to 2000 chars)
+          (p / "verify.py").write_bytes(base64.b64decode("IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJTdGF0aWMgYWNjZXB0YW5jZSBjaGVja3MgZm9yIHRoZSBCYWJ5IGRzaC1HbyBpT1MgZm9yay4iIiIKZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IGFyZ3BhcnNlCmltcG9ydCBqc29uCmltcG9ydCBwbGlzdGxpYgppbXBvcnQgcmUKaW1wb3J0IHN1YnByb2Nlc3MKZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpQSU5ORURfQ09NTUlUID0gImQ0Njg0N2ZmMmUwOTUzZDIwMzVlMGU2MDc4YmUxZTA2ZGQ3Y2JjNDAiCk9MRF9CVU5ETEVfSUQgPSAiaW8uZ2l0aHViLmNjY2gxbW5leXl5LmRzaGdvIgpSRVFVSVJFRCA9ICgKICAgICJhcHAvbGliL3N0YXRlL2FwcF9pbmZvLmRhcnQiLAogICAgImFwcC9saWIvdWkvY2hhdC9lbXB0eV9zdGF0ZS5kYXJ0IiwKICAgICJhcHAvbGliL2wxMG4vcGFydHMvdmlld196aC5hcmIiLAogICAgImFwcC9saWIvbDEwbi9wYXJ0cy92aWV3X2VuLmFyYiIsCiAgICAiYXBwL2xpYi9sMTBuL2FwcF96aC5hcmIiLAogICAgImFwcC9saWIvbDEwbi9hcHBfZW4uYXJiIiwKICAgICJhcHAvYW5kcm9pZC9hcHAvc3JjL21haW4vQW5kcm9pZE1hbmlmZXN0LnhtbCIsCiAgICAiYXBwL2lvcy9SdW5uZXIvSW5mby5wbGlzdCIsCiAgICAiYXBwL2lvcy9SdW5uZXIueGNvZGVwcm9qL3Byb2plY3QucGJ4cHJvaiIsCiAgICAiYXBwL2lvcy9SdW5uZXIvUnVubmVyLmVudGl0bGVtZW50cyIsCiAgICAiYXBwL2lvcy9TaGFyZUV4dGVuc2lvbi9TaGFyZUluYm94LnN3aWZ0IiwKKQpCQUJZX0tFWVMgPSB0dXBsZSgKICAgIGYidmlld0JhYnl7YXJlYX17c3VmZml4fSIKICAgIGZvciBhcmVhIGluICgiUGxhbiIsICJGaWxlcyIsICJSZXZpZXciLCAiSWRlYSIpCiAgICBmb3Igc3VmZml4IGluICgiIiwgIkhpbnQiLCAiUHJvbXB0IikKKQoKCmRlZiByZWFkKHJvb3Q6IFBhdGgsIHJlbDogc3RyKSAtPiBzdHI6CiAgICByZXR1cm4gKHJvb3QgLyByZWwpLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQoKCmRlZiBmYWlsKG1lc3NhZ2U6IHN0cikgLT4gTm9uZToKICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJGQUlMOiB7bWVzc2FnZX0iKQoKCmRlZiBtYWluKCkgLT4gaW50OgogICAgcGFyc2VyID0gYXJncGFyc2UuQXJndW1lbnRQYXJzZXIoZGVzY3JpcHRpb249X19kb2NfXykKICAgIHBhcnNlci5hZGRfYXJndW1lbnQoIi0tcmVwbyIsIHJlcXVpcmVkPVRydWUsIHR5cGU9UGF0aCkKICAgIHBhcnNlci5hZGRfYXJndW1lbnQoIi0tYnVuZGxlLXByZWZpeCIsIGRlZmF1bHQ9ImNvbS5iYW9iYW8uZHNoZ28iKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgiLS1leHBlY3RlZC1jb21taXQiLCBkZWZhdWx0PVBJTk5FRF9DT01NSVQpCiAgICBhcmdzID0gcGFyc2VyLnBhcnNlX2FyZ3MoKQogICAgcm9vdCA9IGFyZ3MucmVwby5yZXNvbHZlKCkKICAgIGlmIG5vdCByb290LmlzX2RpcigpOgogICAgIC... (line truncated to 2000 chars)
+          subprocess.run([sys.executable, str(p / "patch.py"), "--repo", "."], check=True)
+          subprocess.run([sys.executable, str(p / "verify.py"), "--repo", "."], check=True)
+          BABY_PATCH
+
+      - name: Show the toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone
+
+      - name: Check pet overlay recovery and production state contracts
+        run: bash tooling/ios/pet-overlay-tests/contract.sh
+
+      - name: Check real readiness crypto and the enabled Swift native interface
+        run: |
+          python3 tooling/ios/tests/phone-self-runner.test.py -v
+          xcrun swiftc -swift-version 5 -typecheck -D DSH_PHONE_SELF_RUNNER \
+            -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+            -target arm64-apple-ios17.0-simulator \
+            -import-objc-header tooling/ios/phone-self-runner/include/dsh_phone_self_runner.h \
+            app/ios/PhoneRunner/PhoneRunnerBootstrap.swift app/ios/Runner/IOSPhoneSelfRunner.swift \
+            app/ios/Runner/IOSPhonePairingStore.swift app/ios/Runner/IOSPhoneDDI.swift \
+            app/ios/Runner/IOSPhoneCoreDevice.swift app/ios/Runner/IOSPhoneScreen.swift \
+            app/ios/Runner/IOSPhoneRPCDispatch.swift app/ios/PhoneRunner/PhoneRunnerObservation.swift
+
+      - name: Install Flutter
+        run: |
+          archive="flutter_macos_arm64_${FLUTTER_VERSION}-stable.zip"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/$archive"
+          echo "$FLUTTER_SHA256  $RUNNER_TEMP/$archive" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/$archive" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Resolve dependencies
+        run: |
+          flutter --version
+          python3 app/tool/l10n_merge.py --no-gen
+          cd app
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+
+      - name: Check where the engine looks for its addons
+        run: |
+          python3 -B tooling/ios/test-native-loader.py -v
+          python3 -B tooling/ios/test-guest-embedding.py -v
+          python3 -B runtime/tests/ohos/host-core.py --ios --out "$RUNNER_TEMP/host-core-ios"
+          python3 -B runtime/tests/ohos/host-core.py --out "$RUNNER_TEMP/host-core-hap"
+
+      - name: Compile for the simulator
+        working-directory: app
+        run: bash ../tooling/ios/build.sh --simulator --debug
+
+      - name: Compile for a device, unsigned
+        working-directory: app
+        run: bash ../tooling/ios/build.sh --release --no-codesign
+
